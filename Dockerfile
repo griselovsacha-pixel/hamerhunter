@@ -16,7 +16,7 @@ RUN wget -qO /tmp/httpx.zip "https://github.com/projectdiscovery/httpx/releases/
     && chmod +x /usr/local/bin/httpx \
     && rm /tmp/httpx.zip
 
-# Nuclei (исправленная ссылка)
+# Nuclei
 RUN wget -qO /tmp/nuclei.zip "https://github.com/projectdiscovery/nuclei/releases/download/v3.3.0/nuclei_3.3.0_linux_amd64.zip" \
     && unzip /tmp/nuclei.zip -d /usr/local/bin/ \
     && chmod +x /usr/local/bin/nuclei \
