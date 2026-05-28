@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hamer Hunter – Web Edition</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🛡️ Hamer Hunter</h1>
+        <p>Профессиональный веб‑сканер уязвимостей</p>
+        <input type="text" id="urlInput" placeholder="https://example.com">
+        <button id="scanBtn">Запустить сканирование</button>
+        <div id="status">Введите URL и нажмите кнопку</div>
+        <div id="results"></div>
+    </div>
+    <script>
+        document.getElementById('scanBtn').addEventListener('click', async () => {
+            const url = document.getElementById('urlInput').value.trim();
+            if (!url) return alert('Введите URL');
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = 'Отправка задачи...';
+            document.getElementById('results').innerHTML = '';
+
+            try {
+                const resp = await fetch('/scan?url=' + encodeURIComponent(url), {method:'POST'});
+                const {task_id} = await resp.json();
+                // Пробуем WebSocket, если не работает – опрос
+                const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const ws = new WebSocket(`${wsProtocol}//${location.host}/ws/${task_id}`);
+                ws.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    if (data.status === 'completed') {
+                        statusEl.textContent = 'Сканирование завершено.';
+                        ws.close();
+                        render(data.findings);
+                    } else {
+                        statusEl.textContent = `Сканирование... (${data.status})`;
+                    }
+                };
+                ws.onerror = () => {
+                    statusEl.textContent = 'WebSocket недоступен, переключаюсь на опрос...';
+                    ws.close();
+                    fallbackPoll(task_id, statusEl);
+                };
+            } catch(e) {
+                statusEl.textContent = 'Ошибка: ' + e.message;
+            }
+        });
+
+        async function fallbackPoll(task_id, statusEl) {
+            const poll = async () => {
+                try {
+                    const resp = await fetch('/scan/' + task_id);
+                    const data = await resp.json();
+                    if (data.status === 'completed') {
+                        statusEl.textContent = 'Сканирование завершено.';
+                        render(data.findings);
+                    } else {
+                        statusEl.textContent = `Сканирование... (${data.status})`;
+                        setTimeout(poll, 1500);
+                    }
+                } catch(e) {
+                    statusEl.textContent = 'Ошибка опроса: ' + e.message;
+                }
+            };
+            poll();
+        }
+
+        function render(findings) {
+            const container = document.getElementById('results');
+            container.innerHTML = findings.map(f => `
+                <div class="card severity-${f.severity}">
+                    <h3>${f.type}</h3>
+                    <div><strong>Severity:</strong> ${f.severity}</div>
+                    <div><strong>URL:</strong> ${f.url}</div>
+                    ${f.description ? `<div>${f.description}</div>` : ''}
+                    ${f.param ? `<div>Параметр: ${f.param} | Payload: ${f.payload}</div>` : ''}
+                    <div class="fix">🔒 <strong>Как исправить:</strong> ${f.fix || ''}</div>
+                </div>
+            `).join('');
+        }
+    </script>
+</body>
+</html>
