@@ -1,36 +1,29 @@
 FROM python:3.11-slim
 
+# Системные зависимости + Go
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    wget unzip git ca-certificates curl perl \
+    wget git ca-certificates curl perl \
     && rm -rf /var/lib/apt/lists/*
 
-# Subfinder
-RUN wget -qO /tmp/subfinder.zip "https://github.com/projectdiscovery/subfinder/releases/download/v2.6.6/subfinder_2.6.6_linux_amd64.zip" \
-    && unzip /tmp/subfinder.zip -d /usr/local/bin/ \
-    && chmod +x /usr/local/bin/subfinder \
-    && rm /tmp/subfinder.zip
+# Установка Go (необходим для сборки subfinder, httpx, nuclei, dalfox)
+ENV GOVERSION=1.21.5
+RUN wget -q https://go.dev/dl/go${GOVERSION}.linux-amd64.tar.gz -O go.tar.gz \
+    && tar -C /usr/local -xzf go.tar.gz \
+    && rm go.tar.gz
+ENV PATH=$PATH:/usr/local/go/bin
 
-# Httpx
-RUN wget -qO /tmp/httpx.zip "https://github.com/projectdiscovery/httpx/releases/download/v1.6.9/httpx_1.6.9_linux_amd64.zip" \
-    && unzip /tmp/httpx.zip -d /usr/local/bin/ \
-    && chmod +x /usr/local/bin/httpx \
-    && rm /tmp/httpx.zip
-
-# Nuclei
-RUN wget -qO /tmp/nuclei.zip "https://github.com/projectdiscovery/nuclei/releases/download/v3.3.0/nuclei_3.3.0_linux_amd64.zip" \
-    && unzip /tmp/nuclei.zip -d /usr/local/bin/ \
-    && chmod +x /usr/local/bin/nuclei \
-    && rm /tmp/nuclei.zip
-
-# Dalfox
-RUN wget -qO /usr/local/bin/dalfox "https://github.com/hahwul/dalfox/releases/download/v2.9.2/dalfox_2.9.2_linux_amd64" \
-    && chmod +x /usr/local/bin/dalfox
+# Установка инструментов через go install (всегда актуальные версии)
+RUN go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest \
+    && go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest \
+    && go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest \
+    && go install -v github.com/hahwul/dalfox/v2@latest \
+    && mv /root/go/bin/* /usr/local/bin/
 
 # Testssl.sh
 RUN git clone --depth 1 https://github.com/drwetter/testssl.sh.git /opt/testssl \
     && ln -s /opt/testssl/testssl.sh /usr/local/bin/testssl
 
-# Sqlmap
+# Sqlmap (через pip, т.к. он написан на Python)
 RUN pip install --no-cache-dir sqlmap
 
 # Commix
